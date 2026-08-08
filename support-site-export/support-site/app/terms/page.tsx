@@ -38,7 +38,7 @@ export default function TermsPage() {
 
           <section>
             <h2>Audience</h2>
-            <p>EDA Unlock is intended only for adults age 18 and older and is not directed to children or minors. The full library includes medical care, alcohol, poker, law, tax, and financial subjects. Do not use the app if you are under 18.</p>
+            <p>EDA Unlock is designed for a general audience. The learning library covers a broad range of educational and professional topics, some of which may be intended for mature users. Parents and guardians should supervise younger users and determine which content is appropriate for them.</p>
           </section>
 
           <section className="terms-notice">
