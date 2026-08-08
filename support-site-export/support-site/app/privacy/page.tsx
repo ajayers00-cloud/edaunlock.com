@@ -42,7 +42,7 @@ export default function PrivacyPage() {
 
           <section><h2>Apple and other providers</h2><p>Apple independently processes information associated with App Store downloads, purchases, TestFlight, device services, and operating-system diagnostics under Apple’s policies. Your chosen email provider, Google as the recipient mailbox provider, and the support-site hosting infrastructure process information needed for their services under their own terms. EDA Unlock does not sell personal information or share it for advertising.</p></section>
 
-          <section><h2>Children</h2><p>EDA Unlock is designed for a general audience. Some learning content may cover topics intended for more mature users. Parents and guardians should supervise younger users and decide what content is appropriate for them.</p></section>
+          <section><h2>Children</h2><p>EDA Unlock is designed for a general audience. Some learning content may cover topics intended for more mature users. Parents and guardians should supervise younger users to decide what content is appropriate for them.</p></section>
 
           <section><h2>Changes and contact</h2><p>A material change to app data practices will require updated in-app notice and, where appropriate, renewed acknowledgement before that version is used. Questions, privacy requests, and content-rights concerns can be sent to <a href={`mailto:${supportEmail}`}>{supportEmail}</a>.</p></section>
         </article>
