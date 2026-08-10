@@ -93,7 +93,7 @@ export default function Home() {
       <section className="stats-strip" aria-label="EDA Unlock facts">
         <div className="shell stats-grid">
           <div><strong>62</strong><span>learning banks</span></div>
-          <div><strong>15,999</strong><span>questions</span></div>
+          <div><strong>15,000+</strong><span>questions</span></div>
           <div><strong>0</strong><span>accounts or cloud restores</span></div>
         </div>
       </section>
