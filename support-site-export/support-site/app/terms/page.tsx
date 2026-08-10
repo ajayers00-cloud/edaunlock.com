@@ -96,11 +96,6 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2>Alcohol and poker content</h2>
-            <p>Alcohol, bartending, wine, and poker material is presented for general education. EDA Unlock does not offer real-money gambling and does not encourage underage drinking, excessive alcohol consumption, wagering, or unlawful conduct. You are responsible for following applicable age restrictions and local law.</p>
-          </section>
-
-          <section>
             <h2>Responsible use and intellectual property</h2>
             <p>Your right to use EDA Unlock is personal, limited, and subject to the applicable App Store license. Do not use the app unlawfully or unlawfully copy, scrape, extract, republish, sell, sublicense, disrupt, reverse engineer, or misuse the app or question library. These restrictions apply only to the extent permitted by law and do not transfer ownership of the app or third-party materials to you.</p>
             <p>Report a content-rights concern to <a href={`mailto:${supportEmail}?subject=EDA%20Unlock%20Content%20Rights`}>{supportEmail}</a> with enough information to identify the material and explain the concern.</p>
