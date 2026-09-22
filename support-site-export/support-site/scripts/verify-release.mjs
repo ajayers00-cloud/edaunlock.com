@@ -1,0 +1,12 @@
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import assert from "node:assert/strict";
+const seedPath = process.argv[2];
+if (!seedPath) throw new Error("Provide the native question-banks.seed.json path");
+const bytes = await readFile(seedPath);
+const { banks } = JSON.parse(bytes);
+const manifest = JSON.parse(await readFile(new URL("../content/release.json", import.meta.url), "utf8"));
+assert.equal(banks.length, manifest.bankCount);
+assert.equal(banks.reduce((sum, bank) => sum + bank.questions.length, 0), manifest.authoredQuestionCount);
+assert.equal(createHash("sha256").update(bytes).digest("hex"), manifest.seedSHA256);
+console.log(`Verified ${manifest.bankCount} banks and ${manifest.authoredQuestionCount} authored questions against the native seed.`);

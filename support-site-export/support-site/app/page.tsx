@@ -1,24 +1,34 @@
+import release from "../content/release.json";
+
 const supportEmail = "Eda.learning.hq@gmail.com";
 
 const helpTopics = [
   {
     number: "01",
     title: "Set up protection",
-    text: "Open Settings in EDA Unlock, choose the apps or websites you want to protect, then allow Screen Time access when iOS asks.",
+    text: "Start with Screen Time Guard on Home. Allow Screen Time access, choose the apps, categories, or websites to guard, select a learning bank, then activate protection.",
   },
   {
     number: "02",
     title: "Tune your challenge",
-    text: "Choose the enabled learning banks, challenge length, difficulty, cooldown, and unlock duration that work for you.",
+    text: "In Library, activate up to four question banks. Questions alternate between active banks, each with its own progress. Use Configure to adjust your challenge and cooldown.",
   },
   {
     number: "03",
     title: "Recover access",
-    text: "Use Emergency Bypass when you need immediate access. Reset Profile removes your local setup and lets you start again.",
+    text: "Emergency Bypass is optional and off by default. If enabled, use the authentication offered in the app. Reset Profile removes your local setup and history; it does not restore them.",
   },
 ];
 
 const faqs = [
+  {"question": "Can I use more than one question bank?", "answer": "Yes. Activate up to four banks in Library. With more than one active bank, questions alternate every question and progress is tracked separately for each bank. Library shows which banks are active."},
+  {"question": "How do starting grades and difficulty work?", "answer": "When selecting a K–12 bank in Library or during first setup, choose your starting grade. After that, progression is automatic: four consecutive correct answers advance the level and three consecutive wrong answers lower it, within the bank’s available levels. There is no manual move-up or move-down prompt."},
+  {"question": "How long does an unlock last?", "answer": "New profiles start with a 30-minute cooldown and a target of two correct answers. You can adjust the available settings in Configure. Existing profiles keep their saved settings; special challenge modes can use different targets."},
+  {"question": "What happens when I answer incorrectly?", "answer": "In the redirected unlock challenge, your wrong choice appears yellow and the correct answer appears green. Read the explanation, then choose Next Question. The challenge uses the question’s authored choices, from two to four, and adjusts or scrolls longer content."},
+  {"question": "Why does an unlock challenge differ from practice?", "answer": "The compact challenge opened from a guarded app uses supported multiple-choice questions. Board-style activities such as Chess and Sudoku use the full practice experience. Available question formats can differ between these two paths."},
+  {"question": "Will EDA send me back to the guarded app?", "answer": "After a successful challenge, the guard is temporarily lowered. In this build, switch back to the app you wanted to use yourself; automatic return to every guarded app is not available."},
+  {"question": "Is Emergency Bypass always available?", "answer": "No. It is optional and off by default. If enabled, it requires the authentication offered by the app. It is not a guarantee of immediate access. Keep another safe way to reach emergency communications."},
+  {"question": "Who is EDA Unlock for?", "answer": "EDA Unlock is intended for adults age 18 and older. K–12 labels describe educational material and starting levels, not an app intended for children. See the Terms for content and Screen Time limitations."},
   {
     question: "Why does EDA Unlock ask for Screen Time permission?",
     answer:
@@ -32,18 +42,18 @@ const faqs = [
   {
     question: "How do I change protected apps or learning banks?",
     answer:
-      "Open Settings inside EDA Unlock. You can update your protected selection, enabled banks, challenge rules, and unlock behavior at any time.",
+      "Use Edit Guarded Apps at the top of Configure to change protected items. Choose learning banks in Library. Once initial setup is complete, the Screen Time Guard checklist moves from Home to the bottom of Configure.",
   },
   {
     question: "How do I report a question or problem?",
     answer:
-      "Use the feedback action in the app or email support below. The app prepares an email draft for you to review before anything is sent.",
+      "Use Chat for feedback, Flag Question to report a question, or email support below. Review the editable email draft and choose Send; nothing is sent automatically.",
   },
 ];
 
 export default function Home() {
   return (
-    <main>
+    <main id="main-content">
       <header className="site-header shell">
         <a className="brand" href="#top" aria-label="EDA Unlock support home">
           <span className="brand-mark">E</span>
@@ -69,7 +79,7 @@ export default function Home() {
             <a className="primary-button" href={`mailto:${supportEmail}?subject=EDA%20Unlock%20Support`}>
               Email support <span aria-hidden="true">→</span>
             </a>
-            <span>Typical response: 1–2 business days</span>
+            <span>Include your app version and iOS version</span>
           </div>
         </div>
 
@@ -78,25 +88,29 @@ export default function Home() {
           <div className="orbit orbit-two" />
           <div className="phone-card">
             <div className="phone-top"><span>9:41</span><span>● ●</span></div>
-            <div className="mini-label">TODAY’S PAUSE</div>
-            <div className="score-ring"><strong>3</strong><span>of 5</span></div>
-            <p>One thoughtful answer<br />at a time.</p>
-            <div className="answer-line active" />
-            <div className="answer-line" />
-            <div className="answer-line short" />
+            <div className="mini-label">UNLOCK CHALLENGE</div>
+            <div className="mini-progress">Science <span>0 / 2 correct</span></div>
+            <p>Which planet is closest to the Sun?</p>
+            <div className="answer-line">A <span>Venus</span></div>
+            <div className="answer-line active">B <span>Mercury</span></div>
+            <div className="answer-line">C <span>Earth</span></div>
+            <div className="answer-line">D <span>Mars</span></div>
+            <div className="mini-caption">Illustrative challenge</div>
           </div>
-          <div className="art-badge badge-a">62 banks</div>
+          <div className="art-badge badge-a">{release.bankCount} banks</div>
           <div className="art-badge badge-b">On device</div>
         </div>
       </section>
 
       <section className="stats-strip" aria-label="EDA Unlock facts">
         <div className="shell stats-grid">
-          <div><strong>62</strong><span>learning banks</span></div>
-          <div><strong>15,000+</strong><span>questions</span></div>
+          <div><strong>{release.bankCount}</strong><span>learning banks</span></div>
+          <div><strong>{release.authoredQuestionCount.toLocaleString("en-US")}</strong><span>authored questions</span></div>
           <div><strong>0</strong><span>accounts or cloud restores</span></div>
         </div>
       </section>
+
+      <p className="release-note shell">Library counts reflect version {release.appVersion}, build {release.build}. Generated practice variations are separate from authored questions.</p>
 
       <section className="help-section shell" id="help">
         <div className="section-heading">
@@ -128,7 +142,7 @@ export default function Home() {
           <div className="faq-list">
             {faqs.map((item) => (
               <details key={item.question}>
-                <summary>{item.question}<span>+</span></summary>
+                <summary>{item.question}<span aria-hidden="true">+</span></summary>
                 <p>{item.answer}</p>
               </details>
             ))}

@@ -36,255 +36,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 	enumerable: true
 }) : target, mod));
 //#endregion
-//#region node_modules/vinext/dist/server/http-error-responses.js
-/**
-* Build a 400 Bad Request plain-text response.
-*
-* Used for malformed percent-encoding, invalid HTTP methods (where Next.js
-* returns 400), and other request-shape validation failures.
-*/
-function badRequestResponse(init) {
-	return new Response("Bad Request", {
-		status: 400,
-		headers: init?.headers
-	});
-}
-/**
-* Build a 403 Forbidden plain-text response.
-*
-* Used by CSRF origin validation and dev-server origin checks.
-*/
-function forbiddenResponse() {
-	return new Response("Forbidden", {
-		status: 403,
-		headers: { "Content-Type": "text/plain" }
-	});
-}
-/**
-* Build a 404 Not Found plain-text response.
-*
-* The `headers` option lets call sites merge middleware response headers into
-* the 404, matching the pattern used by `app-rsc-handler` after a route match
-* fails but middleware has already contributed headers.
-*/
-function notFoundResponse(init) {
-	return new Response("Not Found", {
-		status: 404,
-		headers: init?.headers
-	});
-}
-/**
-* Build a 405 Method Not Allowed plain-text response with the `Allow` header set.
-*
-* `allowedMethods` is rendered as the comma-separated `Allow` header value.
-* Existing headers (e.g. middleware response headers) can be merged via `init.headers`;
-* the `Allow` header takes precedence and overwrites any colliding entry.
-*/
-function methodNotAllowedResponse(allowedMethods, init) {
-	const headers = new Headers(init?.headers);
-	headers.set("Allow", allowedMethods);
-	return new Response("Method Not Allowed", {
-		status: 405,
-		headers
-	});
-}
-/**
-* Build a 413 Payload Too Large plain-text response.
-*
-* Used by server action body-size enforcement.
-*/
-function payloadTooLargeResponse() {
-	return new Response("Payload Too Large", { status: 413 });
-}
-/**
-* Build a 500 Internal Server Error plain-text response.
-*
-* The `message` argument lets dev-mode handlers surface failure details while
-* production paths fall back to the canonical body. Pass `undefined` (or omit)
-* to use the canonical "Internal Server Error" body.
-*/
-function internalServerErrorResponse(message, init) {
-	return new Response(message ?? "Internal Server Error", {
-		status: 500,
-		headers: init?.headers
-	});
-}
-//#endregion
-//#region node_modules/vinext/dist/server/image-optimization.js
-/**
-* Next.js default device sizes and image sizes.
-* These are the allowed widths for image optimization when no custom
-* config is provided. Matches Next.js defaults exactly.
-*/
-var DEFAULT_DEVICE_SIZES = [
-	640,
-	750,
-	828,
-	1080,
-	1200,
-	1920,
-	2048,
-	3840
-];
-var DEFAULT_IMAGE_SIZES = [
-	16,
-	32,
-	48,
-	64,
-	96,
-	128,
-	256,
-	384
-];
-/**
-* Absolute maximum image width. Even if custom deviceSizes/imageSizes are
-* configured, widths above this are always rejected. This prevents resource
-* exhaustion from absurdly large resize requests.
-*/
-var ABSOLUTE_MAX_WIDTH = 3840;
-/**
-* Parse and validate image optimization query parameters.
-* Returns null if the request is malformed.
-*
-* When `allowedWidths` is provided, the width must be 0 (no resize) or
-* exactly match one of the allowed values. This matches Next.js behavior
-* where only configured deviceSizes and imageSizes are accepted.
-*
-* When `allowedWidths` is not provided, any width from 0 to ABSOLUTE_MAX_WIDTH
-* is accepted (backwards-compatible fallback).
-*/
-function parseImageParams(url, allowedWidths) {
-	const imageUrl = url.searchParams.get("url");
-	if (!imageUrl) return null;
-	const w = parseInt(url.searchParams.get("w") || "0", 10);
-	const q = parseInt(url.searchParams.get("q") || "75", 10);
-	if (Number.isNaN(w) || w < 0) return null;
-	if (w > ABSOLUTE_MAX_WIDTH) return null;
-	if (allowedWidths && w !== 0 && !allowedWidths.includes(w)) return null;
-	if (Number.isNaN(q) || q < 1 || q > 100) return null;
-	const normalizedUrl = imageUrl.replaceAll("\\", "/");
-	if (!normalizedUrl.startsWith("/") || normalizedUrl.startsWith("//")) return null;
-	try {
-		const base = "https://localhost";
-		if (new URL(normalizedUrl, base).origin !== base) return null;
-	} catch {
-		return null;
-	}
-	return {
-		imageUrl: normalizedUrl,
-		width: w,
-		quality: q
-	};
-}
-/**
-* Negotiate the best output format based on the Accept header.
-* Returns an IANA media type.
-*/
-function negotiateImageFormat(acceptHeader) {
-	if (!acceptHeader) return "image/jpeg";
-	if (acceptHeader.includes("image/avif")) return "image/avif";
-	if (acceptHeader.includes("image/webp")) return "image/webp";
-	return "image/jpeg";
-}
-/**
-* Standard Cache-Control header for optimized images.
-* Optimized images are immutable because the URL encodes the transform params.
-*/
-var IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
-/**
-* Allowlist of Content-Types that are safe to serve from the image endpoint.
-* SVG is intentionally excluded — it can contain embedded JavaScript and is
-* essentially an XML document, not a safe raster image format.
-*/
-var SAFE_IMAGE_CONTENT_TYPES = /* @__PURE__ */ new Set([
-	"image/jpeg",
-	"image/png",
-	"image/gif",
-	"image/webp",
-	"image/avif",
-	"image/x-icon",
-	"image/vnd.microsoft.icon",
-	"image/bmp",
-	"image/tiff"
-]);
-/**
-* Check if a Content-Type header value is a safe image type.
-* Returns false for SVG (unless dangerouslyAllowSVG is true), HTML, or any non-image type.
-*/
-function isSafeImageContentType(contentType, dangerouslyAllowSVG = false) {
-	if (!contentType) return false;
-	const mediaType = contentType.split(";")[0].trim().toLowerCase();
-	if (SAFE_IMAGE_CONTENT_TYPES.has(mediaType)) return true;
-	if (dangerouslyAllowSVG && mediaType === "image/svg+xml") return true;
-	return false;
-}
-/**
-* Apply security headers to an image optimization response.
-* These headers are set on every response from the image endpoint,
-* regardless of whether the image was transformed or served as-is.
-* When an ImageConfig is provided, uses its values for CSP and Content-Disposition.
-*/
-function setImageSecurityHeaders(headers, config) {
-	headers.set("Content-Security-Policy", config?.contentSecurityPolicy ?? "script-src 'none'; frame-src 'none'; sandbox;");
-	headers.set("X-Content-Type-Options", "nosniff");
-	headers.set("Content-Disposition", config?.contentDispositionType === "attachment" ? "attachment" : "inline");
-}
-function createPassthroughImageResponse(source, config) {
-	const headers = new Headers(source.headers);
-	headers.set("Cache-Control", IMAGE_CACHE_CONTROL);
-	headers.set("Vary", "Accept");
-	setImageSecurityHeaders(headers, config);
-	return new Response(source.body, {
-		status: 200,
-		headers
-	});
-}
-/**
-* Handle image optimization requests.
-*
-* Parses and validates the request, fetches the source image via the provided
-* handlers, optionally transforms it, and returns the response with appropriate
-* cache headers.
-*/
-async function handleImageOptimization(request, handlers, allowedWidths, imageConfig) {
-	const params = parseImageParams(new URL(request.url), allowedWidths);
-	if (!params) return badRequestResponse();
-	const { imageUrl, width, quality } = params;
-	const source = await handlers.fetchAsset(imageUrl, request);
-	if (!source.ok || !source.body) return new Response("Image not found", { status: 404 });
-	const format = negotiateImageFormat(request.headers.get("Accept"));
-	const sourceContentType = source.headers.get("Content-Type");
-	if (!isSafeImageContentType(sourceContentType, imageConfig?.dangerouslyAllowSVG)) return new Response("The requested resource is not an allowed image type", { status: 400 });
-	if (sourceContentType?.split(";")[0].trim().toLowerCase() === "image/svg+xml") return createPassthroughImageResponse(source, imageConfig);
-	if (handlers.transformImage) try {
-		const transformed = await handlers.transformImage(source.body, {
-			width,
-			format,
-			quality
-		});
-		const headers = new Headers(transformed.headers);
-		headers.set("Cache-Control", IMAGE_CACHE_CONTROL);
-		headers.set("Vary", "Accept");
-		setImageSecurityHeaders(headers, imageConfig);
-		if (!isSafeImageContentType(headers.get("Content-Type"), imageConfig?.dangerouslyAllowSVG)) headers.set("Content-Type", format);
-		return new Response(transformed.body, {
-			status: 200,
-			headers
-		});
-	} catch (e) {
-		console.error("[vinext] Image optimization error:", e);
-	}
-	try {
-		return createPassthroughImageResponse(source, imageConfig);
-	} catch (e) {
-		console.error("[vinext] Image fallback error, refetching source image:", e);
-		const refetchedSource = await handlers.fetchAsset(imageUrl, request);
-		if (!refetchedSource.ok || !refetchedSource.body) return new Response("Image not found", { status: 404 });
-		if (!isSafeImageContentType(refetchedSource.headers.get("Content-Type"), imageConfig?.dangerouslyAllowSVG)) return new Response("The requested resource is not an allowed image type", { status: 400 });
-		return createPassthroughImageResponse(refetchedSource, imageConfig);
-	}
-}
-//#endregion
 //#region node_modules/vinext/dist/shims/internal/als-registry.js
 /**
 * Shared helper for registering AsyncLocalStorage instances on `globalThis`
@@ -453,6 +204,80 @@ function runWithExecutionContext(ctx, fn) {
 function getRequestExecutionContext() {
 	if (isInsideUnifiedScope()) return getRequestContext().executionContext;
 	return _als$3.getStore() ?? null;
+}
+//#endregion
+//#region node_modules/vinext/dist/server/http-error-responses.js
+/**
+* Build a 400 Bad Request plain-text response.
+*
+* Used for malformed percent-encoding, invalid HTTP methods (where Next.js
+* returns 400), and other request-shape validation failures.
+*/
+function badRequestResponse(init) {
+	return new Response("Bad Request", {
+		status: 400,
+		headers: init?.headers
+	});
+}
+/**
+* Build a 403 Forbidden plain-text response.
+*
+* Used by CSRF origin validation and dev-server origin checks.
+*/
+function forbiddenResponse() {
+	return new Response("Forbidden", {
+		status: 403,
+		headers: { "Content-Type": "text/plain" }
+	});
+}
+/**
+* Build a 404 Not Found plain-text response.
+*
+* The `headers` option lets call sites merge middleware response headers into
+* the 404, matching the pattern used by `app-rsc-handler` after a route match
+* fails but middleware has already contributed headers.
+*/
+function notFoundResponse(init) {
+	return new Response("Not Found", {
+		status: 404,
+		headers: init?.headers
+	});
+}
+/**
+* Build a 405 Method Not Allowed plain-text response with the `Allow` header set.
+*
+* `allowedMethods` is rendered as the comma-separated `Allow` header value.
+* Existing headers (e.g. middleware response headers) can be merged via `init.headers`;
+* the `Allow` header takes precedence and overwrites any colliding entry.
+*/
+function methodNotAllowedResponse(allowedMethods, init) {
+	const headers = new Headers(init?.headers);
+	headers.set("Allow", allowedMethods);
+	return new Response("Method Not Allowed", {
+		status: 405,
+		headers
+	});
+}
+/**
+* Build a 413 Payload Too Large plain-text response.
+*
+* Used by server action body-size enforcement.
+*/
+function payloadTooLargeResponse() {
+	return new Response("Payload Too Large", { status: 413 });
+}
+/**
+* Build a 500 Internal Server Error plain-text response.
+*
+* The `message` argument lets dev-mode handlers surface failure details while
+* production paths fall back to the canonical body. Pass `undefined` (or omit)
+* to use the canonical "Internal Server Error" body.
+*/
+function internalServerErrorResponse(message, init) {
+	return new Response(message ?? "Internal Server Error", {
+		status: 500,
+		headers: init?.headers
+	});
 }
 //#endregion
 //#region node_modules/vinext/dist/utils/base-path.js
@@ -5605,42 +5430,6 @@ function markDynamicUsage() {
 	if (state.headersContext?.forceStatic) return;
 	state.dynamicUsageDetected = true;
 }
-/** Symbol used by cache-runtime.ts to store the "use cache" ALS on globalThis */
-var _USE_CACHE_ALS_KEY = Symbol.for("vinext.cacheRuntime.contextAls");
-/** Symbol used by cache.ts to store the unstable_cache ALS on globalThis */
-var _UNSTABLE_CACHE_ALS_KEY = Symbol.for("vinext.unstableCache.als");
-var _gHeaders = globalThis;
-function _isInsideUseCache() {
-	return _gHeaders[_USE_CACHE_ALS_KEY]?.getStore() != null;
-}
-function _isInsideUnstableCache() {
-	return _gHeaders[_UNSTABLE_CACHE_ALS_KEY]?.getStore() === true;
-}
-/**
-* Throw if the current execution is inside a "use cache" or unstable_cache()
-* scope. Called by dynamic request APIs (headers, cookies, connection) to
-* prevent request-specific data from being frozen into cached results.
-*
-* @param apiName - The name of the API being called (e.g. "connection()")
-*/
-function throwIfInsideCacheScope(apiName) {
-	if (_isInsideUseCache()) {
-		const error = /* @__PURE__ */ new Error(`\`${apiName}\` cannot be called inside "use cache". If you need this data inside a cached function, call \`${apiName}\` outside and pass the required data as an argument.`);
-		try {
-			const ctx = getRequestContext();
-			if (ctx) ctx.invalidDynamicUsageError = error;
-		} catch {}
-		throw error;
-	}
-	if (_isInsideUnstableCache()) {
-		const error = /* @__PURE__ */ new Error(`\`${apiName}\` cannot be called inside a function cached with \`unstable_cache()\`. If you need this data inside a cached function, call \`${apiName}\` outside and pass the required data as an argument.`);
-		try {
-			const ctx = getRequestContext();
-			if (ctx) ctx.invalidDynamicUsageError = error;
-		} catch {}
-		throw error;
-	}
-}
 /**
 * Check, consume, and return any invalid dynamic usage error recorded during
 * the render (e.g. cookies() called inside "use cache"). This error persists
@@ -5752,63 +5541,6 @@ var _HEADERS_MUTATING_METHODS = /* @__PURE__ */ new Set([
 	"delete",
 	"append"
 ]);
-var ReadonlyHeadersError = class ReadonlyHeadersError extends Error {
-	constructor() {
-		super("Headers cannot be modified. Read more: https://nextjs.org/docs/app/api-reference/functions/headers");
-	}
-	static callable() {
-		throw new ReadonlyHeadersError();
-	}
-};
-function _decorateRequestApiPromise(promise, target) {
-	return new Proxy(promise, {
-		get(promiseTarget, prop) {
-			if (prop in promiseTarget) {
-				const value = Reflect.get(promiseTarget, prop, promiseTarget);
-				return typeof value === "function" ? value.bind(promiseTarget) : value;
-			}
-			const value = Reflect.get(target, prop, target);
-			return typeof value === "function" ? value.bind(target) : value;
-		},
-		has(promiseTarget, prop) {
-			return prop in promiseTarget || prop in target;
-		},
-		ownKeys(promiseTarget) {
-			return Array.from(/* @__PURE__ */ new Set([...Reflect.ownKeys(promiseTarget), ...Reflect.ownKeys(target)]));
-		},
-		getOwnPropertyDescriptor(promiseTarget, prop) {
-			return Reflect.getOwnPropertyDescriptor(promiseTarget, prop) ?? Reflect.getOwnPropertyDescriptor(target, prop);
-		}
-	});
-}
-var _decoratedHeadersPromises = /* @__PURE__ */ new WeakMap();
-function _getOrCreateDecoratedRequestApiPromise(cache, target) {
-	const cached = cache.get(target);
-	if (cached) return cached;
-	const promise = _decorateRequestApiPromise(Promise.resolve(target), target);
-	cache.set(target, promise);
-	return promise;
-}
-function _decorateRejectedRequestApiPromise(error) {
-	const normalizedError = error instanceof Error ? error : new Error(String(error));
-	const promise = Promise.reject(normalizedError);
-	promise.catch(() => {});
-	return _decorateRequestApiPromise(promise, new Proxy({}, { get(_target, prop) {
-		if (prop === "then" || prop === "catch" || prop === "finally") return;
-		throw normalizedError;
-	} }));
-}
-function _sealHeaders(headers) {
-	return new Proxy(headers, { get(target, prop) {
-		if (typeof prop === "string" && _HEADERS_MUTATING_METHODS.has(prop)) throw new ReadonlyHeadersError();
-		const value = Reflect.get(target, prop, target);
-		return typeof value === "function" ? value.bind(target) : value;
-	} });
-}
-function _getReadonlyHeaders(ctx) {
-	if (!ctx.readonlyHeaders) ctx.readonlyHeaders = _sealHeaders(ctx.headers);
-	return ctx.readonlyHeaders;
-}
 /**
 * Create a HeadersContext from a standard Request object.
 *
@@ -5854,23 +5586,6 @@ function headersContextFromRequest(request) {
 		}
 	};
 }
-/**
-* Read-only Headers instance from the incoming request.
-* Returns a Promise in Next.js 15+ style (but resolves synchronously since
-* the context is already available).
-*/
-function headers() {
-	try {
-		throwIfInsideCacheScope("headers()");
-	} catch (error) {
-		return _decorateRejectedRequestApiPromise(error);
-	}
-	const state = _getState$2();
-	if (!state.headersContext) return _decorateRejectedRequestApiPromise(/* @__PURE__ */ new Error("headers() can only be called from a Server Component, Route Handler, or Server Action. Make sure you're not calling it from a Client Component."));
-	if (state.headersContext.accessError) return _decorateRejectedRequestApiPromise(state.headersContext.accessError);
-	markDynamicUsage();
-	return _getOrCreateDecoratedRequestApiPromise(_decoratedHeadersPromises, _getReadonlyHeaders(state.headersContext));
-}
 /** Accumulated Set-Cookie headers from cookies().set() / .delete() calls */
 /**
 * Get and clear all pending Set-Cookie headers generated by cookies().set()/delete().
@@ -5885,7 +5600,7 @@ function getAndClearPendingCookies() {
 var DRAFT_MODE_COOKIE = "__prerender_bypass";
 (/* @__PURE__ */ new Date(0)).toUTCString();
 function getDraftSecret() {
-	return "b059bfac-cf35-42bb-b45a-f8d8f38c1bb3";
+	return "e431b4dc-d46d-4d11-8152-514c7a6ccbfe";
 }
 /**
 * Get any Set-Cookie header generated by draftMode().enable()/disable().
@@ -7800,7 +7515,7 @@ var NextURL = class NextURL {
 	* Matches the Next.js API: `request.nextUrl.buildId`.
 	*/
 	get buildId() {
-		return "0865acb0-a826-4b08-8195-63ed7520caf5";
+		return "e5edf697-4a53-4c86-835d-9d8a51a15984";
 	}
 };
 var RequestCookies = class {
@@ -12922,7 +12637,7 @@ function buildCacheKey(prefix, pathname, suffix) {
 * The suffix mirrors Next.js's separate on-disk app artifacts while keeping the
 * Cloudflare KV key under its 512-byte limit for long pathnames.
 */
-function appIsrCacheKey(pathname, suffix, buildId = "0865acb0-a826-4b08-8195-63ed7520caf5") {
+function appIsrCacheKey(pathname, suffix, buildId = "e5edf697-4a53-4c86-835d-9d8a51a15984") {
 	return buildCacheKey(buildId ? `app:${buildId}` : "app", pathname, suffix);
 }
 function appIsrHtmlKey(pathname) {
@@ -13251,7 +12966,7 @@ function createAppPageArtifactCompatibility(element, routePattern) {
 			routePattern,
 			rootBoundaryId
 		}),
-		deploymentVersion: "0865acb0-a826-4b08-8195-63ed7520caf5",
+		deploymentVersion: "e5edf697-4a53-4c86-835d-9d8a51a15984",
 		rootBoundaryId
 	});
 }
@@ -14646,6 +14361,16 @@ function clearAppRequestContext() {
 	setHeadersContext(null);
 	setAppNavigationContext(null);
 }
+var release_default = {
+	appVersion: "1.0",
+	build: 23,
+	verifiedAt: "2026-09-22",
+	bankCount: 46,
+	authoredQuestionCount: 13730,
+	seedSHA256: "7a425c74ef8d8bf7cb7984356721b9e25c3a331b3a1e54b18fe7275ddf927606",
+	termsVersion: "2026-08-04.1",
+	privacyVersion: "2026-08-04.1"
+};
 //#endregion
 //#region app/page.tsx
 var page_exports$2 = /* @__PURE__ */ __exportAll({ default: () => Home });
@@ -14654,20 +14379,52 @@ var helpTopics = [
 	{
 		number: "01",
 		title: "Set up protection",
-		text: "Open Settings in EDA Unlock, choose the apps or websites you want to protect, then allow Screen Time access when iOS asks."
+		text: "Start with Screen Time Guard on Home. Allow Screen Time access, choose the apps, categories, or websites to guard, select a learning bank, then activate protection."
 	},
 	{
 		number: "02",
 		title: "Tune your challenge",
-		text: "Choose the enabled learning banks, challenge length, difficulty, cooldown, and unlock duration that work for you."
+		text: "In Library, activate up to four question banks. Questions alternate between active banks, each with its own progress. Use Configure to adjust your challenge and cooldown."
 	},
 	{
 		number: "03",
 		title: "Recover access",
-		text: "Use Emergency Bypass when you need immediate access. Reset Profile removes your local setup and lets you start again."
+		text: "Emergency Bypass is optional and off by default. If enabled, use the authentication offered in the app. Reset Profile removes your local setup and history; it does not restore them."
 	}
 ];
 var faqs = [
+	{
+		"question": "Can I use more than one question bank?",
+		"answer": "Yes. Activate up to four banks in Library. With more than one active bank, questions alternate every question and progress is tracked separately for each bank. Library shows which banks are active."
+	},
+	{
+		"question": "How do starting grades and difficulty work?",
+		"answer": "When selecting a K–12 bank in Library or during first setup, choose your starting grade. After that, progression is automatic: four consecutive correct answers advance the level and three consecutive wrong answers lower it, within the bank’s available levels. There is no manual move-up or move-down prompt."
+	},
+	{
+		"question": "How long does an unlock last?",
+		"answer": "New profiles start with a 30-minute cooldown and a target of two correct answers. You can adjust the available settings in Configure. Existing profiles keep their saved settings; special challenge modes can use different targets."
+	},
+	{
+		"question": "What happens when I answer incorrectly?",
+		"answer": "In the redirected unlock challenge, your wrong choice appears yellow and the correct answer appears green. Read the explanation, then choose Next Question. The challenge uses the question’s authored choices, from two to four, and adjusts or scrolls longer content."
+	},
+	{
+		"question": "Why does an unlock challenge differ from practice?",
+		"answer": "The compact challenge opened from a guarded app uses supported multiple-choice questions. Board-style activities such as Chess and Sudoku use the full practice experience. Available question formats can differ between these two paths."
+	},
+	{
+		"question": "Will EDA send me back to the guarded app?",
+		"answer": "After a successful challenge, the guard is temporarily lowered. In this build, switch back to the app you wanted to use yourself; automatic return to every guarded app is not available."
+	},
+	{
+		"question": "Is Emergency Bypass always available?",
+		"answer": "No. It is optional and off by default. If enabled, it requires the authentication offered by the app. It is not a guarantee of immediate access. Keep another safe way to reach emergency communications."
+	},
+	{
+		"question": "Who is EDA Unlock for?",
+		"answer": "EDA Unlock is intended for adults age 18 and older. K–12 labels describe educational material and starting levels, not an app intended for children. See the Terms for content and Screen Time limitations."
+	},
 	{
 		question: "Why does EDA Unlock ask for Screen Time permission?",
 		answer: "EDA Unlock uses Apple’s Family Controls framework to shield only the apps, categories, and websites you select. Permission is optional until you activate protection and can be revoked in iOS Settings."
@@ -14678,226 +14435,255 @@ var faqs = [
 	},
 	{
 		question: "How do I change protected apps or learning banks?",
-		answer: "Open Settings inside EDA Unlock. You can update your protected selection, enabled banks, challenge rules, and unlock behavior at any time."
+		answer: "Use Edit Guarded Apps at the top of Configure to change protected items. Choose learning banks in Library. Once initial setup is complete, the Screen Time Guard checklist moves from Home to the bottom of Configure."
 	},
 	{
 		question: "How do I report a question or problem?",
-		answer: "Use the feedback action in the app or email support below. The app prepares an email draft for you to review before anything is sent."
+		answer: "Use Chat for feedback, Flag Question to report a question, or email support below. Review the editable email draft and choose Send; nothing is sent automatically."
 	}
 ];
 function Home() {
-	return /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("main", { children: [
-		/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("header", {
-			className: "site-header shell",
-			children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("a", {
-				className: "brand",
-				href: "#top",
-				"aria-label": "EDA Unlock support home",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
-					className: "brand-mark",
-					children: "E"
-				}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "EDA Unlock" })]
-			}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("nav", {
-				"aria-label": "Support navigation",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
-						className: "desktop-nav-link",
-						href: "#help",
-						children: "Help"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
-						className: "desktop-nav-link",
-						href: "#faq",
-						children: "FAQ"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
-						href: "/privacy",
-						children: "Privacy"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
-						href: "/terms",
-						children: "Terms"
-					})
-				]
-			})]
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", {
-			className: "hero shell",
-			id: "top",
-			children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-				className: "hero-copy",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", {
-						className: "eyebrow",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {}), " Official support"]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("h1", { children: [
-						"A clearer path to",
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("em", { children: "intentional access." })
-					] }),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", {
-						className: "hero-lede",
-						children: "Find quick answers for setup, Screen Time permission, challenges, protected apps, and local profile recovery."
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-						className: "hero-actions",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("a", {
-							className: "primary-button",
-							href: `mailto:${supportEmail$2}?subject=EDA%20Unlock%20Support`,
-							children: ["Email support ", /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
-								"aria-hidden": "true",
-								children: "→"
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "Typical response: 1–2 business days" })]
-					})
-				]
-			}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-				className: "hero-art",
-				"aria-label": "EDA Unlock learning challenge illustration",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", { className: "orbit orbit-one" }),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", { className: "orbit orbit-two" }),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-						className: "phone-card",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-								className: "phone-top",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "9:41" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "● ●" })]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
-								className: "mini-label",
-								children: "TODAY’S PAUSE"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-								className: "score-ring",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "3" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "of 5" })]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", { children: [
-								"One thoughtful answer",
-								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
-								"at a time."
-							] }),
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", { className: "answer-line active" }),
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", { className: "answer-line" }),
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", { className: "answer-line short" })
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
-						className: "art-badge badge-a",
-						children: "62 banks"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
-						className: "art-badge badge-b",
-						children: "On device"
-					})
-				]
-			})]
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("section", {
-			className: "stats-strip",
-			"aria-label": "EDA Unlock facts",
-			children: /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-				className: "shell stats-grid",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "62" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "learning banks" })] }),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "15,999" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "questions" })] }),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "0" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "accounts or cloud restores" })] })
-				]
-			})
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", {
-			className: "help-section shell",
-			id: "help",
-			children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-				className: "section-heading",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", {
-					className: "eyebrow",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {}), " Start here"]
-				}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("h2", { children: [
-					"Quick help for",
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
-					"common moments."
-				] })] }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock keeps control with the device owner. These three paths cover most setup and recovery questions." })]
-			}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
-				className: "topic-grid",
-				children: helpTopics.map((topic) => /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("article", {
-					className: "topic-card",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
-							className: "topic-number",
-							children: topic.number
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h3", { children: topic.title }),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: topic.text })
-					]
-				}, topic.number))
-			})]
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("section", {
-			className: "faq-wrap",
-			id: "faq",
-			children: /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-				className: "shell faq-grid",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
-					className: "faq-intro",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", {
-							className: "eyebrow light",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {}), " Questions"]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Good to know." }),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "Still stuck? Send us the device model, iOS version, and a short description of what happened." }),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("a", {
-							href: `mailto:${supportEmail$2}?subject=EDA%20Unlock%20Support`,
-							children: [
-								supportEmail$2,
-								" ",
-								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
-									"aria-hidden": "true",
-									children: "→"
-								})
-							]
-						})
-					]
-				}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
-					className: "faq-list",
-					children: faqs.map((item) => /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("details", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("summary", { children: [item.question, /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "+" })] }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: item.answer })] }, item.question))
-				})]
-			})
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("footer", {
-			className: "site-footer shell",
-			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+	return /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("main", {
+		id: "main-content",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("header", {
+				className: "site-header shell",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("a", {
 					className: "brand",
+					href: "#top",
+					"aria-label": "EDA Unlock support home",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
 						className: "brand-mark",
 						children: "E"
 					}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "EDA Unlock" })]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "Choose the pause. Earn the unlock." }),
-				/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
-						href: "/privacy",
-						children: "Privacy"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
-						href: "/terms",
-						children: "Terms"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
-						href: `mailto:${supportEmail$2}`,
-						children: "Contact"
-					})
-				] }),
-				/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", {
-					className: "copyright",
-					children: "© 2026 Aiden Ayers"
+				}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("nav", {
+					"aria-label": "Support navigation",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
+							className: "desktop-nav-link",
+							href: "#help",
+							children: "Help"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
+							className: "desktop-nav-link",
+							href: "#faq",
+							children: "FAQ"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
+							href: "/privacy",
+							children: "Privacy"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
+							href: "/terms",
+							children: "Terms"
+						})
+					]
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", {
+				className: "hero shell",
+				id: "top",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+					className: "hero-copy",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", {
+							className: "eyebrow",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {}), " Official support"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("h1", { children: [
+							"A clearer path to",
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("em", { children: "intentional access." })
+						] }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", {
+							className: "hero-lede",
+							children: "Find quick answers for setup, Screen Time permission, challenges, protected apps, and local profile recovery."
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+							className: "hero-actions",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("a", {
+								className: "primary-button",
+								href: `mailto:${supportEmail$2}?subject=EDA%20Unlock%20Support`,
+								children: ["Email support ", /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
+									"aria-hidden": "true",
+									children: "→"
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "Include your app version and iOS version" })]
+						})
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+					className: "hero-art",
+					"aria-label": "EDA Unlock learning challenge illustration",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", { className: "orbit orbit-one" }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", { className: "orbit orbit-two" }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+							className: "phone-card",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+									className: "phone-top",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "9:41" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "● ●" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
+									className: "mini-label",
+									children: "UNLOCK CHALLENGE"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+									className: "mini-progress",
+									children: ["Science ", /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "0 / 2 correct" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "Which planet is closest to the Sun?" }),
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+									className: "answer-line",
+									children: ["A ", /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "Venus" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+									className: "answer-line active",
+									children: ["B ", /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "Mercury" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+									className: "answer-line",
+									children: ["C ", /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "Earth" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+									className: "answer-line",
+									children: ["D ", /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "Mars" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
+									className: "mini-caption",
+									children: "Illustrative challenge"
+								})
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+							className: "art-badge badge-a",
+							children: [release_default.bankCount, " banks"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
+							className: "art-badge badge-b",
+							children: "On device"
+						})
+					]
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("section", {
+				className: "stats-strip",
+				"aria-label": "EDA Unlock facts",
+				children: /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+					className: "shell stats-grid",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: release_default.bankCount }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "learning banks" })] }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: release_default.authoredQuestionCount.toLocaleString("en-US") }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "authored questions" })] }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "0" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "accounts or cloud restores" })] })
+					]
 				})
-			]
-		})
-	] });
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", {
+				className: "release-note shell",
+				children: [
+					"Library counts reflect version ",
+					release_default.appVersion,
+					", build ",
+					release_default.build,
+					". Generated practice variations are separate from authored questions."
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", {
+				className: "help-section shell",
+				id: "help",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+					className: "section-heading",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", {
+						className: "eyebrow",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {}), " Start here"]
+					}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("h2", { children: [
+						"Quick help for",
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
+						"common moments."
+					] })] }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock keeps control with the device owner. These three paths cover most setup and recovery questions." })]
+				}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
+					className: "topic-grid",
+					children: helpTopics.map((topic) => /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("article", {
+						className: "topic-card",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
+								className: "topic-number",
+								children: topic.number
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h3", { children: topic.title }),
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: topic.text })
+						]
+					}, topic.number))
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("section", {
+				className: "faq-wrap",
+				id: "faq",
+				children: /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+					className: "shell faq-grid",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+						className: "faq-intro",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", {
+								className: "eyebrow light",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {}), " Questions"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Good to know." }),
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "Still stuck? Send us the device model, iOS version, and a short description of what happened." }),
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("a", {
+								href: `mailto:${supportEmail$2}?subject=EDA%20Unlock%20Support`,
+								children: [
+									supportEmail$2,
+									" ",
+									/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
+										"aria-hidden": "true",
+										children: "→"
+									})
+								]
+							})
+						]
+					}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("div", {
+						className: "faq-list",
+						children: faqs.map((item) => /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("details", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("summary", { children: [item.question, /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
+							"aria-hidden": "true",
+							children: "+"
+						})] }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: item.answer })] }, item.question))
+					})]
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("footer", {
+				className: "site-footer shell",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", {
+						className: "brand",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", {
+							className: "brand-mark",
+							children: "E"
+						}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("span", { children: "EDA Unlock" })]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "Choose the pause. Earn the unlock." }),
+					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
+							href: "/privacy",
+							children: "Privacy"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
+							href: "/terms",
+							children: "Terms"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
+							href: `mailto:${supportEmail$2}`,
+							children: "Contact"
+						})
+					] }),
+					/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", {
+						className: "copyright",
+						children: "© 2026 Aiden Ayers"
+					})
+				]
+			})
+		]
+	});
 }
 var Resources = ((React, deps, RemoveDuplicateServerCss, precedence) => {
 	return function Resources() {
@@ -14914,38 +14700,40 @@ var Resources = ((React, deps, RemoveDuplicateServerCss, precedence) => {
 //#region app/layout.tsx
 var layout_exports = /* @__PURE__ */ __exportAll({
 	default: () => $$wrap_RootLayout,
-	generateMetadata: () => generateMetadata
+	metadata: () => metadata$2
 });
-async function generateMetadata() {
-	const requestHeaders = await headers();
-	const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-	return {
-		title: {
-			default: "EDA Unlock Support",
-			template: "%s · EDA Unlock"
-		},
-		description: "Official help, setup guidance, privacy information, and contact details for EDA Unlock.",
-		icons: {
-			icon: "/favicon.svg",
-			shortcut: "/favicon.svg"
-		},
-		openGraph: {
-			title: "EDA Unlock Support",
-			description: "Help for intentional access, learning challenges, and Screen Time setup.",
-			type: "website",
-			images: [{
-				url: `${requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}/og.png`,
-				width: 1200,
-				height: 630,
-				alt: "EDA Unlock learning challenge"
-			}]
-		}
-	};
-}
+var metadata$2 = {
+	metadataBase: new URL("https://edaunlock.com"),
+	alternates: { canonical: "/" },
+	title: {
+		default: "EDA Unlock Support",
+		template: "%s · EDA Unlock"
+	},
+	description: "Official help, setup guidance, privacy information, and contact details for EDA Unlock.",
+	icons: {
+		icon: "/favicon.svg",
+		shortcut: "/favicon.svg"
+	},
+	openGraph: {
+		title: "EDA Unlock Support",
+		description: "Help for intentional access, learning challenges, and Screen Time setup.",
+		type: "website",
+		images: [{
+			url: "/og.jpg",
+			width: 1200,
+			height: 630,
+			alt: "EDA Unlock learning challenge"
+		}]
+	}
+};
 function RootLayout({ children }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("html", {
 		lang: "en",
-		children: /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("body", { children })
+		children: /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("body", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
+			className: "skip-link",
+			href: "#main-content",
+			children: "Skip to content"
+		}), children] })
 	});
 }
 var $$wrap_RootLayout = /* #__PURE__ */ __vite_rsc_wrap_css__(RootLayout, "default");
@@ -14970,12 +14758,14 @@ var page_exports$1 = /* @__PURE__ */ __exportAll({
 });
 var metadata$1 = {
 	title: "Privacy",
+	alternates: { canonical: "/privacy" },
 	description: "Privacy information for the EDA Unlock iOS app."
 };
 var supportEmail$1 = "Eda.learning.hq@gmail.com";
 function PrivacyPage() {
 	return /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("main", {
 		className: "privacy-main",
+		id: "main-content",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("header", {
 				className: "site-header shell",
@@ -15033,11 +14823,20 @@ function PrivacyPage() {
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
 						"Version",
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "2026-08-04.1" })
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "2026-08-04.1" }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
+						"Website clarification",
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "September 22, 2026" })
 					]
 				}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("article", {
 					className: "privacy-copy",
 					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", {
+							className: "policy-clarification",
+							children: "This website clarification aligns the audience guidance with the adult-only policy already presented in app version 1.0, build 23. It does not introduce a new in-app acceptance version or change existing acceptance records."
+						}),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "At a glance" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock does not require an online account and does not include advertising, tracking, third-party analytics, or an EDA-operated cloud service in this version. Your profile, settings, learning activity, and Screen Time configuration stay on your device unless you deliberately send a support email." })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Information stored on your device" }),
@@ -15047,13 +14846,13 @@ function PrivacyPage() {
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Screen Time and protected selections" }),
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "If you activate protection, EDA Unlock uses Apple’s Family Controls, Device Activity, and Managed Settings frameworks. Apple gives the app opaque selection tokens for the apps, categories, and websites you choose. EDA Unlock uses those tokens only to operate your selected shields; it does not turn them into browsing history or read the contents of other apps." }),
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "The app and its Screen Time extensions share the minimum local operational state needed to apply a shield, run a challenge, and relock. When a shield is shown, the app may temporarily store the blocked app’s display name or a web domain so it can offer a return link. That origin record stays local, is not a bundle identifier or browsing history, expires within 15 minutes, and is removed on expiry, completion, bypass, or profile reset." })
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "The app and its Screen Time extensions share the minimum local operational state needed to apply a shield, run a challenge, and relock. When a shield is shown, the app may temporarily store the blocked app’s display name or a web domain, and an available return URL for a supported app, to identify where an unlock request began. This does not guarantee automatic navigation back to that app. That origin record stays local, is not a bundle identifier or browsing history, expires within 15 minutes, and is removed on expiry, completion, bypass, or profile reset." })
 						] }),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Passwords and device authentication" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock stores a salted password-derived verifier—not the plaintext password—in Apple’s Keychain. Login throttling is also stored in device-only protected storage. When Face ID, Touch ID, or the device passcode is offered for an authorized reset, iOS performs the check; EDA Unlock receives only the result and does not receive or store biometric data." })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Feedback and question reports" }),
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", { children: [
-								"Send Feedback and Flag Question prepare an editable email addressed to ",
+								"Chat feedback and Flag Question prepare an editable email addressed to ",
 								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
 									href: `mailto:${supportEmail$1}`,
 									children: supportEmail$1
@@ -15083,7 +14882,7 @@ function PrivacyPage() {
 						] }),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Public support-site requests" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "These Support, Privacy, and Terms pages use no account, advertising, analytics, or tracking cookies. Like ordinary web hosting, the hosting infrastructure necessarily processes the requested path, IP address, timestamp, and browser/network headers and may retain limited request and security logs for delivery, abuse prevention, and reliability. Those web requests are not linked to your local EDA Unlock profile." })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Apple and other providers" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "Apple independently processes information associated with App Store downloads, purchases, TestFlight, device services, and operating-system diagnostics under Apple’s policies. Your chosen email provider, Google as the recipient mailbox provider, and the support-site hosting infrastructure process information needed for their services under their own terms. EDA Unlock does not sell personal information or share it for advertising." })] }),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Children" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock is intended for adults age 18 and older and is not directed to children or minors. It has no account, tracking, or automatic collection from children. Medical, alcohol, poker, legal, tax, and financial subject banks make the full-library product unsuitable for minors." })] }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Children" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock is intended for adults age 18 and older and is not directed to children or minors. K–12 labels describe educational material and starting levels; they do not make the app child-directed." })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Changes and contact" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", { children: [
 							"A material change to app data practices will require updated in-app notice and, where appropriate, renewed acknowledgement before that version is used. Questions, privacy requests, and content-rights concerns can be sent to ",
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
@@ -15137,12 +14936,14 @@ var page_exports = /* @__PURE__ */ __exportAll({
 });
 var metadata = {
 	title: "Terms of Use",
+	alternates: { canonical: "/terms" },
 	description: "Terms of Use and important content notices for the EDA Unlock iOS app."
 };
 var supportEmail = "Eda.learning.hq@gmail.com";
 function TermsPage() {
 	return /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("main", {
 		className: "privacy-main",
+		id: "main-content",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("header", {
 				className: "site-header shell",
@@ -15200,14 +15001,23 @@ function TermsPage() {
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
 						"Version",
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "2026-08-04.1" })
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "2026-08-04.1" }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
+						"Website clarification",
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("br", {}),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("strong", { children: "September 22, 2026" })
 					]
 				}), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("article", {
 					className: "privacy-copy",
 					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", {
+							className: "policy-clarification",
+							children: "This website clarification aligns the audience guidance with the adult-only policy already presented in app version 1.0, build 23. It does not introduce a new in-app acceptance version or change existing acceptance records."
+						}),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Agreement and App Store license" }),
-							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "These Terms are between you and the App Store seller or developer responsible for EDA Unlock. By choosing “I Agree” in the app or by continuing to use it, you agree to these Terms. If you do not agree, do not use the app." }),
+							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "These Terms are between you and the App Store seller or developer responsible for EDA Unlock. By choosing “I Agree” in the app, you agree to the Terms presented there. If you do not agree, do not use the app." }),
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("p", { children: [
 								"These Terms supplement Apple's ",
 								/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("a", {
@@ -15218,7 +15028,7 @@ function TermsPage() {
 							] }),
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "When you accept, EDA Unlock stores this Terms version and the acceptance date and time on your device. It uses that local record to determine whether updated Terms need your review and does not automatically send the record to an EDA Unlock server." })
 						] }),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Audience" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock is intended only for adults age 18 and older and is not directed to children or minors. The full library includes medical care, alcohol, poker, law, tax, and financial subjects. Do not use the app if you are under 18." })] }),
+						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Audience" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock is intended only for adults age 18 and older and is not directed to children or minors. Do not use the app if you are under 18. Academic or K–12 subject labels describe educational material only and do not make the product child-directed." })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", {
 							className: "terms-notice",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Important safety and professional-content notice" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "The question library is for general education only. It is not medical, emergency, legal, tax, financial, investment, accounting, or other professional advice. Do not rely on EDA Unlock for patient care, emergencies, filings, deadlines, contracts, transactions, investments, or other real-world professional decisions." })]
@@ -15264,7 +15074,6 @@ function TermsPage() {
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock is an independent product. References to third-party names, products, standards, professional bodies, regulators, schools, examinations, or trademarks identify subject matter only." }),
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "EDA Unlock is not sponsored, endorsed, approved, certified, or operated by Apple, Microsoft, an examination owner, a certification body, a professional association, a regulator, a school, or another referenced organization. All third-party trademarks belong to their respective owners." })
 						] }),
-						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Alcohol and poker content" }), /* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "Alcohol, bartending, wine, and poker material is presented for general education. EDA Unlock does not offer real-money gambling and does not encourage underage drinking, excessive alcohol consumption, wagering, or unlawful conduct. You are responsible for following applicable age restrictions and local law." })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsxs)("section", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("h2", { children: "Responsible use and intellectual property" }),
 							/* @__PURE__ */ (0, import_jsx_runtime_react_server.jsx)("p", { children: "Your right to use EDA Unlock is personal, limited, and subject to the applicable App Store license. Do not use the app unlawfully or unlawfully copy, scrape, extract, republish, sell, sublicense, disrupt, reverse engineer, or misuse the app or question library. These restrictions apply only to the extent permitted by law and do not transfer ownership of the app or third-party materials to you." }),
@@ -15367,6 +15176,9 @@ function __resolveRouteFetchCacheMode(route) {
 }
 function __VINEXT_CLASS(routeIdx) { return ((routeIdx) => {
     switch (routeIdx) {
+      case 0: return new Map([[0, "static"]]);
+      case 1: return new Map([[0, "static"]]);
+      case 2: return new Map([[0, "static"]]);
       default: return null;
     }
   })(routeIdx); }
@@ -15556,7 +15368,13 @@ var __configRewrites = {
 	"fallback": []
 };
 var __configHeaders = [];
-var __publicFiles = /* @__PURE__ */ new Set(["/favicon.svg", "/og.png"]);
+var __publicFiles = /* @__PURE__ */ new Set([
+	"/favicon.svg",
+	"/og.jpg",
+	"/og.png",
+	"/robots.txt",
+	"/sitemap.xml"
+]);
 var __allowedOrigins = [];
 var __expireTime = 31536e3;
 var __allowedDevOrigins = [];
@@ -15916,16 +15734,21 @@ async function handleRequest(request, env, ctx) {
 //#endregion
 //#region \0virtual:cloudflare/worker-entry
 var worker_entry_default = { async fetch(request, env, ctx) {
-	if (new URL(request.url).pathname === "/_vinext/image") return handleImageOptimization(request, {
-		fetchAsset: (path) => env.ASSETS.fetch(new Request(new URL(path, request.url))),
-		transformImage: async (body, { width, format, quality }) => {
-			return (await env.IMAGES.input(body).transform(width > 0 ? { width } : {}).output({
-				format,
-				quality
-			})).response();
-		}
-	}, [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES]);
-	const response = await app_router_entry_default.fetch(request, env, ctx);
+	const url = new URL(request.url);
+	if ((url.hostname === "edaunlock.com" || url.hostname === "www.edaunlock.com") && (url.protocol !== "https:" || url.hostname !== "edaunlock.com")) {
+		url.protocol = "https:";
+		url.hostname = "edaunlock.com";
+		url.port = "";
+		return Response.redirect(url.toString(), 308);
+	}
+	if (url.pathname === "/_vinext/image") return new Response("Not found", { status: 404 });
+	const response = url.pathname.startsWith("/assets/") || [
+		"/favicon.svg",
+		"/og.png",
+		"/og.jpg",
+		"/robots.txt",
+		"/sitemap.xml"
+	].includes(url.pathname) ? await env.ASSETS.fetch(request) : await app_router_entry_default.fetch(request, env, ctx);
 	const headers = new Headers(response.headers);
 	headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' mailto:; upgrade-insecure-requests");
 	headers.set("Cross-Origin-Opener-Policy", "same-origin");

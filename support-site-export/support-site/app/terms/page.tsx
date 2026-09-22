@@ -3,6 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Terms of Use",
+  alternates: { canonical: "/terms" },
   description: "Terms of Use and important content notices for the EDA Unlock iOS app.",
 };
 
@@ -10,7 +11,7 @@ const supportEmail = "Eda.learning.hq@gmail.com";
 
 export default function TermsPage() {
   return (
-    <main className="privacy-main">
+    <main className="privacy-main" id="main-content">
       <header className="site-header shell">
         <Link className="brand" href="/" aria-label="EDA Unlock support home"><span className="brand-mark">E</span><span>EDA Unlock</span></Link>
         <nav aria-label="Support navigation"><Link className="desktop-nav-link" href="/">Support home</Link><a href="/privacy">Privacy</a><a href={`mailto:${supportEmail}`}>Contact</a></nav>
@@ -25,20 +26,22 @@ export default function TermsPage() {
       <div className="privacy-content shell">
         <aside className="privacy-meta">
           Effective<br /><strong>August 4, 2026</strong><br /><br />
-          Version<br /><strong>2026-08-04.1</strong>
+          Version<br /><strong>2026-08-04.1</strong><br /><br />
+          Website clarification<br /><strong>September 22, 2026</strong>
         </aside>
 
         <article className="privacy-copy">
+          <p className="policy-clarification">This website clarification aligns the audience guidance with the adult-only policy already presented in app version 1.0, build 23. It does not introduce a new in-app acceptance version or change existing acceptance records.</p>
           <section>
             <h2>Agreement and App Store license</h2>
-            <p>These Terms are between you and the App Store seller or developer responsible for EDA Unlock. By choosing “I Agree” in the app or by continuing to use it, you agree to these Terms. If you do not agree, do not use the app.</p>
+            <p>These Terms are between you and the App Store seller or developer responsible for EDA Unlock. By choosing “I Agree” in the app, you agree to the Terms presented there. If you do not agree, do not use the app.</p>
             <p>These Terms supplement Apple&apos;s <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">Standard Licensed Application End User License Agreement</a>, which governs the App Store license. Apple is not a party to these supplemental Terms and is not responsible for EDA Unlock or its question content. The Standard EULA and any rights that cannot be waived under applicable law control if there is a conflict.</p>
             <p>When you accept, EDA Unlock stores this Terms version and the acceptance date and time on your device. It uses that local record to determine whether updated Terms need your review and does not automatically send the record to an EDA Unlock server.</p>
           </section>
 
           <section>
             <h2>Audience</h2>
-            <p>EDA Unlock is designed for a general audience. The learning library covers a broad range of educational and professional topics, some of which may be intended for mature users. Parents and guardians should supervise younger users and determine which content is appropriate for them.</p>
+            <p>EDA Unlock is intended only for adults age 18 and older and is not directed to children or minors. Do not use the app if you are under 18. Academic or K–12 subject labels describe educational material only and do not make the product child-directed.</p>
           </section>
 
           <section className="terms-notice">

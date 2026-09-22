@@ -1,0 +1,7 @@
+**/node_modules/
+**/.wrangler/
+**/.vite/
+**/.env*
+**/.dev.vars*
+**/*.tsbuildinfo
+.DS_Store
